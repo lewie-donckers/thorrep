@@ -1,4 +1,16 @@
-﻿local TR_DEBUG = false
+﻿-- TODO
+-- - document more
+-- - check if reaching max rank is handled properly
+-- - check if max target rank detection can be improved
+-- - display current rank in logline?
+-- - display friendship rank name when reaching it
+-- - Faction:Update() has some duplicatish code
+
+
+
+---------- CONSTANTS
+
+local TR_DEBUG = false
 
 -- TR_FACTION_RANK_MIN and TR_FACTION_RANK_MAX should match the indices in _G["FACTION_STANDING_LABEL"] (and thus TR_FACTION_RANK_NAMES) and TR_COLOR_RANKS.
 -- TR_FACTION_RANK_MIN applies to both standard factions and friendships.
@@ -15,8 +27,9 @@ local TR_COLOR_NAME = "|cffffff78"
 local TR_COLOR_NR = "|cffff7831"
 local TR_COLOR_RESUME = "|r"
 
--- TODO documentation
--- TODO TODO list :)
+
+
+---------- HELPER FUNCTIONS
 
 -- Format the given message and extra parameters (effectively using string.format) in the given color.
 local function FormatColor(color, message, ...)
@@ -55,6 +68,8 @@ local function Clamp(value, min, max)
 end
 
 
+
+---------- CLASSES
 
 -- Faction class
 Faction = {}
@@ -119,7 +134,6 @@ function Faction:Update()
 
         local message = string.format("%s %s", FormatName(self.name_), FormatNr(rep_delta, "%+d"))
 
-        -- TODO check if reaching max rank is handled properly
         if rep_delta > 0 then
             if rank < self.maxRank_ then
                 next_rank = self:GetColoredRepLevelName(rank + 1)
@@ -130,7 +144,6 @@ function Faction:Update()
             local togo_next = barMax - rep_new
             local reps_next = math.ceil(togo_next / math.abs(rep_delta))
     
-            -- TODO merge with next bit?
             message = message .. string.format(", %s @ %s (%sx)", next_rank, FormatNr(togo_next), FormatNr(reps_next))
 
             if rank < self.maxRank_ then
@@ -200,7 +213,13 @@ end
 
 
 
+---------- STATE
+
 local factions = Factions:Create()
+
+
+
+---------- EVENT HANDLERS
 
 local function HandleFactionUpdate()
     if factions:ShouldScan() then factions:Scan() end
@@ -213,6 +232,10 @@ local function HandleEvent(self, event, ...)
         HandleFactionUpdate()
     end
 end
+
+
+
+---------- SETUP
 
 local frame = CreateFrame("FRAME", nil, UIParent)
 frame:RegisterEvent("UPDATE_FACTION")
