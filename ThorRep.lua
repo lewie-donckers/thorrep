@@ -4,7 +4,6 @@
 -- - check if max target rank detection can be improved
 -- - display friendship rank name when reaching it
 -- - Faction:Update() has some duplicatish code
--- - update rank colors
 
 
 
@@ -21,8 +20,8 @@ local TR_FACTION_REP_MAX = 3000 + 6000 + 12000 + 21000
 local TR_FACTION_RANK_NAMES = {}
 for index = TR_FACTION_RANK_MIN, TR_FACTION_RANK_MAX do TR_FACTION_RANK_NAMES[index] = _G["FACTION_STANDING_LABEL" .. index] end
 
--- Rank colors taken from WoW Armory website.
-local TR_COLOR_RANKS = {"|cffd90e03", "|cffd90e03", "|cffcc3609", "|cffedba03", "|cff0f9601", "|cff0f9601", "|cff0f9601", "|cff28a687"}
+-- Rank colors taken from http://www.wow-pro.com/general_guides/colour_guide.
+local TR_COLOR_RANKS = {"|cffcc0000", "|cffff0000", "|cfff26000", "|cffe4e400", "|cff33ff33", "|cff5fe65d", "|cff53e9bc", "|cff2ee6e6"}
 local TR_COLOR_NAME = "|cffffff78"
 local TR_COLOR_NR = "|cffff7831"
 local TR_COLOR_RESUME = "|r"
