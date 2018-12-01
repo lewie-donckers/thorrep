@@ -1,9 +1,10 @@
 ﻿local TR_DEBUG = false
 
--- These constants only apply to standard factions (not friendships)
+-- TR_FACTION_RANK_MIN and TR_FACTION_RANK_MAX should match the indices in _G["FACTION_STANDING_LABEL"] (and thus TR_FACTION_RANK_NAMES) and TR_COLOR_RANKS.
+-- TR_FACTION_RANK_MIN applies to both standard factions and friendships.
+-- The other constants only apply to standard factions.
 local TR_FACTION_RANK_MIN = 1
 local TR_FACTION_RANK_MAX = 8
--- TODO check if we can get this from somewhere else
 local TR_FACTION_REP_MAX = 3000 + 6000 + 12000 + 21000
 local TR_FACTION_RANK_NAMES = {}
 for index = TR_FACTION_RANK_MIN, TR_FACTION_RANK_MAX do TR_FACTION_RANK_NAMES[index] = _G["FACTION_STANDING_LABEL" .. index] end
@@ -17,29 +18,35 @@ local TR_COLOR_RESUME = "|r"
 -- TODO documentation
 -- TODO TODO list :)
 
+-- Format the given message and extra parameters (effectively using string.format) in the given color.
 local function FormatColor(color, message, ...)
     return color .. string.format(message, ...) .. TR_COLOR_RESUME
 end
 
+-- Format the given name using the corresponding color.
 local function FormatName(name)
     return FormatColor(TR_COLOR_NAME, name)
 end
 
+-- Format the given number using the given number format (effectively using string.format) using the corresponding color. If format is not given, "%d" is used.
 local function FormatNr(nr, format)
     local format = format or "%d"
     return FormatColor(TR_COLOR_NR, format, nr)
 end
 
+-- Formats the given message and extra parameters and logs it to the default frame.
 local function Log(message, ...)
     print(string.format(message, ...))
 end
 
+-- Formats the given message and extra parameters and logs it to the default frame. A prefix is used to indicate it is debug logging for this addon. If TR_DEBUG is false, nothing is done.
 local function LogDebug(message, ...)
     if TR_DEBUG then
         Log("[ThorRep][DBG] " .. message, ...)
     end
 end
 
+-- Clamps the given value between min and max.
 local function Clamp(value, min, max)
     if value < min then return min
     elseif value > max then return max
@@ -58,10 +65,10 @@ function Faction:Create(factionID)
     setmetatable(object, Faction)
     object.factionID_ = factionID
 
-    local name, _, standingID, _, _, barValue = GetFactionInfoByID(factionID)
+    local name, _, rank, _, _, rep_new = GetFactionInfoByID(factionID)
     object.name_ = name
-    object.rank_ = standingID
-    object.rep_ = barValue
+    object.rank_ = rank
+    object.rep_ = rep_new
 
     local friendID, _, friendMaxRep = GetFriendshipReputation(factionID)
     if friendID ~= nil then
@@ -103,44 +110,43 @@ function Faction:GetColoredRepLevelName(rank)
 end
 
 function Faction:Update()
-    local _, _, standingID, barMin, barMax, barValue = GetFactionInfoByID(self.factionID_)
+    local _, _, rank, _, barMax, rep_new = GetFactionInfoByID(self.factionID_)
 
-    local diff = barValue - self.rep_
+    local rep_delta = rep_new - self.rep_
 
-    if diff ~= 0 then
-        self.rep_ = barValue
+    if rep_delta ~= 0 then
+        self.rep_ = rep_new
 
-        -- TODO log after rep gain
-        if standingID ~= self.rank_ then
-            self.rank_ = standingID
-            Log("New standing with %s is %s!", FormatName(self.name_), self:GetColoredRepLevelName(standingID))
-        end
-
-        local message = string.format("%s %s", FormatName(self.name_), FormatNr(diff, "%+d"))
+        local message = string.format("%s %s", FormatName(self.name_), FormatNr(rep_delta, "%+d"))
 
         -- TODO check if reaching max rank is handled properly
-        if diff > 0 then
-            if standingID < self.maxRank_ then
-                next_rank = self:GetColoredRepLevelName(standingID + 1)
+        if rep_delta > 0 then
+            if rank < self.maxRank_ then
+                next_rank = self:GetColoredRepLevelName(rank + 1)
             else
                 next_rank = "end of " .. self:GetColoredRepLevelName(self.maxRank_)
             end
 
-            local togo_next = barMax - barValue
-            local reps_next = math.ceil(togo_next / math.abs(diff))
+            local togo_next = barMax - rep_new
+            local reps_next = math.ceil(togo_next / math.abs(rep_delta))
     
             -- TODO merge with next bit?
             message = message .. string.format(", %s @ %s (%sx)", next_rank, FormatNr(togo_next), FormatNr(reps_next))
 
-            if standingID < self.maxRank_ then
-                local togo_total = self.maxRep_ - barValue
-                local reps_total = math.ceil(togo_total / math.abs(diff))
+            if rank < self.maxRank_ then
+                local togo_total = self.maxRep_ - rep_new
+                local reps_total = math.ceil(togo_total / math.abs(rep_delta))
 
                 message = message .. string.format(", %s @ %s (%sx)", self:GetColoredRepLevelName(self.maxRank_), FormatNr(togo_total), FormatNr(reps_total))
             end
         end
 
         Log(message)
+
+        if rank ~= self.rank_ then
+            self.rank_ = rank
+            Log("New standing with %s is %s!", FormatName(self.name_), self:GetColoredRepLevelName(rank))
+        end
     end
 end
 -- end class
