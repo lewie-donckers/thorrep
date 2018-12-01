@@ -136,6 +136,7 @@ function Faction:UpdateInternal()
 
     self.rep_ = rep_new
     self.rank_ = rank_new
+    self.maxRep_ = math.max(self.maxRep_, next_rank_at)
 
     return rep_delta, rank_change, next_rank_at
 end
@@ -147,19 +148,20 @@ function Faction:Update()
 
     local message = string.format("%s %s (%s)", FormatName(self.name_), FormatNr(rep_delta, "%+d"), self:GetColoredRankName(self.rank_))
 
-    if rep_delta > 0 then
+    if (rep_delta > 0) and (self.rep_ < self.maxRep_) then
+        local next_rank_str
         if self.rank_ < self.maxRank_ then
-            next_rank = self:GetColoredRankName(self.rank_ + 1)
+            next_rank_str = self:GetColoredRankName(self.rank_ + 1)
         else
-            next_rank = "end of " .. self:GetColoredRankName(self.maxRank_)
+            next_rank_str = "full " .. self:GetColoredRankName(self.maxRank_)
         end
 
         local togo_next = next_rank_at - self.rep_
         local reps_next = math.ceil(togo_next / math.abs(rep_delta))
 
-        message = message .. string.format(", %s @ %s (%sx)", next_rank, FormatNr(togo_next), FormatNr(reps_next))
+        message = message .. string.format(", %s @ %s (%sx)", next_rank_str, FormatNr(togo_next), FormatNr(reps_next))
 
-        if self.rank_ < self.maxRank_ - 1 then
+        if self.rank_ + 1 < self.maxRank_ then
             local togo_total = self.maxRep_ - self.rep_
             local reps_total = math.ceil(togo_total / math.abs(rep_delta))
 
