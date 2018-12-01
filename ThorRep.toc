@@ -1,0 +1,6 @@
+## Interface: 80000
+## Title: ThorRep 8.0.1.0
+## Notes: ThorRep does amazing things with reputation updates.
+## Author: Thorinson
+
+ThorRep.lua
