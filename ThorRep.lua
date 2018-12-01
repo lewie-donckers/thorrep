@@ -1,8 +1,5 @@
 ﻿-- TODO
 -- - document more
--- - check if reaching max rank is handled properly
--- - check if max target rank detection can be improved
--- - Faction:Update() has some duplicatish code
 
 
 
@@ -98,13 +95,13 @@ function Faction:Create(factionID)
     return object
 end
 
-function Faction:GetRankColor(rank)
+function Faction:GetRankColor_(rank)
     local offset = TR_FACTION_RANK_MAX - self.maxRank_
     local index = Clamp(rank + offset, TR_FACTION_RANK_MIN, TR_FACTION_RANK_MAX)
     return TR_COLOR_RANKS[index]
 end
 
-function Faction:GetRankName(rank)
+function Faction:GetRankName_(rank)
     local rank = Clamp(rank, TR_FACTION_RANK_MIN, self.maxRank_)
     if self.isFriendship_ then
         if rank == self.rank_ then 
@@ -121,11 +118,11 @@ function Faction:GetRankName(rank)
     end
 end
 
-function Faction:GetColoredRankName(rank)
-    return FormatColor(self:GetRankColor(rank), self:GetRankName(rank))
+function Faction:GetColoredRankName_(rank)
+    return FormatColor(self:GetRankColor_(rank), self:GetRankName_(rank))
 end
 
-function Faction:UpdateInternal()
+function Faction:UpdateInternal_()
     local _, _, rank_new, _, next_rank_at, rep_new = GetFactionInfoByID(self.factionID_)
 
     rep_delta = rep_new - self.rep_
@@ -141,38 +138,42 @@ function Faction:UpdateInternal()
     return rep_delta, rank_change, next_rank_at
 end
 
+function Faction:GetGoalString_(rank_name, rep, reps)
+    return string.format(", %s @ %s (%sx)", rank_name, FormatNr(rep), FormatNr(reps))
+end
+
 function Faction:Update()
-    local rep_delta, rank_change, next_rank_at = self:UpdateInternal()
+    local rep_delta, rank_change, next_rank_at = self:UpdateInternal_()
 
     if rep_delta == 0 then return end
 
-    local message = string.format("%s %s (%s)", FormatName(self.name_), FormatNr(rep_delta, "%+d"), self:GetColoredRankName(self.rank_))
+    local message = string.format("%s %s (%s)", FormatName(self.name_), FormatNr(rep_delta, "%+d"), self:GetColoredRankName_(self.rank_))
 
     if (rep_delta > 0) and (self.rep_ < self.maxRep_) then
         local next_rank_str
         if self.rank_ < self.maxRank_ then
-            next_rank_str = self:GetColoredRankName(self.rank_ + 1)
+            next_rank_str = self:GetColoredRankName_(self.rank_ + 1)
         else
-            next_rank_str = "full " .. self:GetColoredRankName(self.maxRank_)
+            next_rank_str = "full " .. self:GetColoredRankName_(self.maxRank_)
         end
 
         local togo_next = next_rank_at - self.rep_
         local reps_next = math.ceil(togo_next / math.abs(rep_delta))
 
-        message = message .. string.format(", %s @ %s (%sx)", next_rank_str, FormatNr(togo_next), FormatNr(reps_next))
+        message = message .. self:GetGoalString_(next_rank_str, togo_next, reps_next)
 
         if self.rank_ + 1 < self.maxRank_ then
             local togo_total = self.maxRep_ - self.rep_
             local reps_total = math.ceil(togo_total / math.abs(rep_delta))
 
-            message = message .. string.format(", %s @ %s (%sx)", self:GetColoredRankName(self.maxRank_), FormatNr(togo_total), FormatNr(reps_total))
+            message = message .. self:GetGoalString_(self:GetColoredRankName_(self.maxRank_), togo_total, reps_total)
         end
     end
 
     Log(message)
 
     if rank_change then
-        Log("New standing with %s is %s!", FormatName(self.name_), self:GetColoredRankName(self.rank_))
+        Log("New standing with %s is %s!", FormatName(self.name_), self:GetColoredRankName_(self.rank_))
     end
 end
 -- end class
