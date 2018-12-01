@@ -2,9 +2,9 @@
 -- - document more
 -- - check if reaching max rank is handled properly
 -- - check if max target rank detection can be improved
--- - display current rank in logline?
 -- - display friendship rank name when reaching it
 -- - Faction:Update() has some duplicatish code
+-- - update rank colors
 
 
 
@@ -132,7 +132,7 @@ function Faction:Update()
     if rep_delta ~= 0 then
         self.rep_ = rep_new
 
-        local message = string.format("%s %s", FormatName(self.name_), FormatNr(rep_delta, "%+d"))
+        local message = string.format("%s %s (%s)", FormatName(self.name_), FormatNr(rep_delta, "%+d"), self:GetColoredRepLevelName(rank))
 
         if rep_delta > 0 then
             if rank < self.maxRank_ then
