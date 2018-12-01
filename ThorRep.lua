@@ -1,35 +1,11 @@
-﻿-- change frame to what TR_CHATFRAME output is desired
-local frame = 1
---
-
--- .Reputation--DEFAULT .Reputation-standing{color:#0f9601}
--- .Reputation--EXALTED .Reputation-standing{color:#28a687}
--- .Reputation--REVERED .Reputation-standing{color:#0f9601}
--- .Reputation--HONORED .Reputation-standing{color:#0f9601}
--- .Reputation--FRIENDLY .Reputation-standing{color:#0f9601}
--- .Reputation--NEUTRAL .Reputation-standing{color:#edba03}
--- .Reputation--UNFRIENDLY .Reputation-standing{color:#cc3609}
--- .Reputation--HOSTILE .Reputation-standing{color:#d90e03}
--- .Reputation--HATED .Reputation-standing{color:#d90e03}
--- .Reputation--STRANGER .Reputation-standing{color:#cc3609}
--- .Reputation--ACQUAINTANCE .Reputation-standing{color:#edba03}
--- .Reputation--BUDDY .Reputation-standing{color:#0f9601}
--- .Reputation--FRIEND .Reputation-standing{color:#0f9601}
--- .Reputation--GOOD_FRIEND .Reputation-standing{color:#0f9601}
--- .Reputation--BEST_FRIEND .Reputation-standing{color:#28a687}
--- .Reputation--BODYGUARD .Reputation-standing{color:#0f9601}
--- .Reputation--TRUSTED_BODYGUARD .Reputation-standing{color:#0f9601}
--- .Reputation--PERSONAL_WINGMAN .Reputation-standing{color:#0f9601}
-
--- TODO constants in ALL_CAPS
-
-local TR_CHATFRAME = _G["ChatFrame" .. frame]
+﻿local TR_CHATFRAME = _G["ChatFrame1"]
 local TR_DEBUG = true
 
 local TR_REP_LEVEL_MIN = 1
 local TR_REP_LEVEL_MAX = 8
 local TR_EXALTED_AT = 3000 + 6000 + 12000 + 21000
 -- TODO colors taken from WoW Armory website. do not match in-game colors.
+-- TODO simple array would probably suffice as well
 local TR_COLOR_REP_LEVELS = {[1] = "|cffd90e03", [2] = "|cffd90e03", [3] = "|cffcc3609", [4] = "|cffedba03", [5] = "|cff0f9601", [6] = "|cff0f9601", [7] = "|cff0f9601", [8] = "|cff28a687"}
 local TR_COLOR_NAME = "|cffffff78"
 local TR_COLOR_NR = "|cffff7831"
@@ -39,21 +15,6 @@ local TR_COLOR_RESUME = "|r"
 local function FormatColor(color, message, ...)
     return color .. string.format(message, ...) .. TR_COLOR_RESUME
 end
-
-local function GetRepLevelColor(factionID, repLevel)
-    -- TODO handle friends
-    return TR_COLOR_REP_LEVELS[repLevel]
-end
-
-local function GetRepLevelName(factionID, repLevel)
-    -- TODO handle friends
-    return _G["FACTION_STANDING_LABEL" .. repLevel]
-end
-
-local function GetColoredRepLevelName(factionID, repLevel)
-    return FormatColor(GetRepLevelColor(factionID, repLevel), GetRepLevelName(factionID, repLevel))
-end
-
 
 local function Log(message, ...)
     TR_CHATFRAME:AddMessage("[ThorRep] " .. string.format(message, ...))
@@ -90,6 +51,20 @@ function Faction:Create(factionID)
     return object
 end
 
+function Faction:GetRepLevelColor(standingID)
+    -- TODO handle friends
+    return TR_COLOR_REP_LEVELS[standingID]
+end
+
+function Faction:GetRepLevelName(standingID)
+    -- TODO handle friends
+    return _G["FACTION_STANDING_LABEL" .. standingID]
+end
+
+function Faction:GetColoredRepLevelName(standingID)
+    return FormatColor(self:GetRepLevelColor(standingID), self:GetRepLevelName(standingID))
+end
+
 function Faction:Update()
     local _, _, standingID, barMin, barMax, barValue = GetFactionInfoByID(self.factionID)
 
@@ -107,16 +82,16 @@ function Faction:Update()
         if diff > 0 then
             remaining = barMax - barValue
             if standingID < TR_REP_LEVEL_MAX then
-                nextstanding = GetColoredRepLevelName(0, standingID + 1)
+                nextstanding = self:GetColoredRepLevelName(standingID + 1)
             else
-                nextstanding = "End of " .. _G["FACTION_STANDING_LABEL" .. TR_REP_LEVEL_MAX]
+                nextstanding = "End of " .. self:GetColoredRepLevelName(TR_REP_LEVEL_MAX)
             end
         else
             remaining = barValue - barMin
             if standingID > TR_REP_LEVEL_MIN then
-                nextstanding = _G["FACTION_STANDING_LABEL" .. standingID - 1]
+                nextstanding = self:GetColoredRepLevelName(standingID - 1)
             else
-                nextstanding = "Beginning of " .. _G["FACTION_STANDING_LABEL" .. TR_REP_LEVEL_MIN]
+                nextstanding = "Beginning of " .. self:GetColoredRepLevelName(TR_REP_LEVEL_MIN)
             end
         end
 
@@ -134,7 +109,7 @@ function Faction:Update()
             nextstanding,
             FormatColor(TR_COLOR_NR, "%d", repetitions),
             FormatColor(TR_COLOR_NR, "%d", togo_total),
-            GetColoredRepLevelName(0, TR_REP_LEVEL_MAX),
+            self:GetColoredRepLevelName(TR_REP_LEVEL_MAX),
             FormatColor(TR_COLOR_NR, "%d", reps_total)
         )
 
@@ -144,8 +119,7 @@ function Faction:Update()
         self.standingID = standingID
     end
 end
-
--- end
+-- end class
 
 -- Factions class
 Factions = {}
@@ -155,7 +129,7 @@ function Factions:Create()
     local object = {}
     setmetatable(object, Factions)
     object.factions_ = {}
-    object.factionIDs_ = {}
+    object.size_ = 0
     object.indexed_ = 0
     return object
 end
@@ -169,12 +143,12 @@ function Factions:Scan()
 
             if self.factions_[factionID] == nil then
                 self.factions_[factionID] = Faction:Create(factionID)
-                self.factionIDs_[#self.factionIDs_ + 1] = factionID
+                self.size_ = self.size_ + 1
             end
         end
     end
     self.indexed_ = to_index
-    LogDebug("Found %d factions", #self.factionIDs_)
+    LogDebug("Found %d factions", self.size_)
 end
 
 function Factions:ShouldScan()
@@ -182,13 +156,11 @@ function Factions:ShouldScan()
 end
 
 function Factions:Update()
-    for id, faction in pairs(self.factions_) do
-        -- LogDebug("Updating %d...", id)
+    for _, faction in pairs(self.factions_) do
         faction:Update()
     end
 end
-
--- end
+-- end class
 
 
 local factions = Factions:Create()
