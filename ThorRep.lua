@@ -4,10 +4,11 @@
 local TR_FACTION_RANK_MIN = 1
 local TR_FACTION_RANK_MAX = 8
 local TR_FACTION_REP_MAX = 3000 + 6000 + 12000 + 21000
+local TR_FACTION_RANK_NAMES = {}
+for index = TR_FACTION_RANK_MIN, TR_FACTION_RANK_MAX do TR_FACTION_RANK_NAMES[index] = _G["FACTION_STANDING_LABEL" .. index] end
 
--- TODO colors taken from WoW Armory website. do not match in-game colors. in-game colors can be obtained from _G["FACTION_BAR_COLORS"][<standing>][<r|g|b>]
--- TODO simple array would probably suffice as well
-local TR_COLOR_REP_LEVELS = {[1] = "|cffd90e03", [2] = "|cffd90e03", [3] = "|cffcc3609", [4] = "|cffedba03", [5] = "|cff0f9601", [6] = "|cff0f9601", [7] = "|cff0f9601", [8] = "|cff28a687"}
+-- Rank colors taken from WoW Armory website.
+local TR_COLOR_RANKS = {"|cffd90e03", "|cffd90e03", "|cffcc3609", "|cffedba03", "|cff0f9601", "|cff0f9601", "|cff0f9601", "|cff28a687"}
 local TR_COLOR_NAME = "|cffffff78"
 local TR_COLOR_NR = "|cffff7831"
 local TR_COLOR_RESUME = "|r"
@@ -27,7 +28,12 @@ local function LogDebug(message, ...)
     end
 end
 
-
+local function Clamp(value, min, max)
+    if value < min then return min
+    elseif value > max then return max
+    end
+    return value
+end
 
 
 -- Faction class
@@ -60,14 +66,13 @@ function Faction:Create(factionID)
 end
 
 function Faction:GetRepLevelColor(rank)
-    -- TODO handle oob?
     local offset = TR_FACTION_RANK_MAX - self.maxRank_
-    return TR_COLOR_REP_LEVELS[rank + offset]
+    local index = Clamp(rank + offset, TR_FACTION_RANK_MIN, TR_FACTION_RANK_MAX)
+    return TR_COLOR_RANKS[index]
 end
 
 function Faction:GetRepLevelName(rank)
-    -- TODO handle oob?
-    -- TODO get actual friendship level names?
+    local rank = Clamp(rank, TR_FACTION_RANK_MIN, self.maxRank_)
     if self.isFriendship_ then
         if rank == self.maxRank_ then return "max level"
         elseif rank == TR_FACTION_RANK_MIN then return "min level"
@@ -76,7 +81,7 @@ function Faction:GetRepLevelName(rank)
         else return string.format("level %d", rank)
         end
     else
-        return _G["FACTION_STANDING_LABEL" .. rank]
+        return TR_FACTION_RANK_NAMES[rank]
     end
 end
 
@@ -108,16 +113,15 @@ function Faction:Update()
 
             local togo_next = barMax - barValue
             local reps_next = math.ceil(togo_next / math.abs(diff))
-            local togo_total = self.maxRep_ - barValue
-            local reps_total = math.ceil(togo_total / math.abs(diff))
     
-            message = message .. string.format(", %s to %s (%s reps), %s to %s (%s reps)",
-                FormatColor(TR_COLOR_NR, "%d", togo_next),
-                next_rank,
-                FormatColor(TR_COLOR_NR, "%d", reps_next),
-                FormatColor(TR_COLOR_NR, "%d", togo_total),
-                self:GetColoredRepLevelName(self.maxRank_),
-                FormatColor(TR_COLOR_NR, "%d", reps_total))
+            message = message .. string.format(", %s to %s (%s reps)", FormatColor(TR_COLOR_NR, "%d", togo_next), next_rank, FormatColor(TR_COLOR_NR, "%d", reps_next))
+
+            if standingID < self.maxRank_ then
+                local togo_total = self.maxRep_ - barValue
+                local reps_total = math.ceil(togo_total / math.abs(diff))
+
+                message = message .. string.format(", %s to %s (%s reps)", FormatColor(TR_COLOR_NR, "%d", togo_total), self:GetColoredRepLevelName(self.maxRank_), FormatColor(TR_COLOR_NR, "%d", reps_total))
+            end
         end
 
         Log(message)
@@ -142,7 +146,7 @@ function Factions:Scan()
     LogDebug("Scanning factions...")
     local to_index = GetNumFactions()
     for index = 1, to_index do
-        local name, _, standingID, _, _, barValue, _, _, isHeader, _, hasRep, _, _, factionID = GetFactionInfo(index)
+        local _, _, _, _, _, _, _, _, isHeader, _, hasRep, _, _, factionID = GetFactionInfo(index)
         if (not isHeader or hasRep) then
 
             if self.factions_[factionID] == nil then
