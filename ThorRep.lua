@@ -108,7 +108,10 @@ end
 function Faction:GetRepLevelName(rank)
     local rank = Clamp(rank, TR_FACTION_RANK_MIN, self.maxRank_)
     if self.isFriendship_ then
-        if rank == self.maxRank_ then return "max level"
+        if rank == self.rank_ then 
+            local _, _, _, _, _, _, friendTextLevel = GetFriendshipReputation(self.factionID_)
+            return friendTextLevel
+        elseif rank == self.maxRank_ then return "max level"
         elseif rank == TR_FACTION_RANK_MIN then return "min level"
         elseif rank == self.rank_ + 1 then return "next level"
         elseif rank == self.rank_ - 1 then return "previous level"
@@ -123,42 +126,52 @@ function Faction:GetColoredRepLevelName(rank)
     return FormatColor(self:GetRepLevelColor(rank), self:GetRepLevelName(rank))
 end
 
+function Faction:UpdateInternal()
+    local _, _, rank_new, _, next_rank_at, rep_new = GetFactionInfoByID(self.factionID_)
+
+    rep_delta = rep_new - self.rep_
+
+    if (rep_delta == 0) then return 0 end
+
+    local rank_change = self.rank_ ~= rank_new
+
+    self.rep_ = rep_new
+    self.rank_ = rank_new
+
+    return rep_delta, rank_change, next_rank_at
+end
+
 function Faction:Update()
-    local _, _, rank, _, barMax, rep_new = GetFactionInfoByID(self.factionID_)
+    local rep_delta, rank_change, next_rank_at = self:UpdateInternal()
 
-    local rep_delta = rep_new - self.rep_
+    if rep_delta == 0 then return end
 
-    if rep_delta ~= 0 then
-        self.rep_ = rep_new
+    local message = string.format("%s %s (%s)", FormatName(self.name_), FormatNr(rep_delta, "%+d"), self:GetColoredRepLevelName(self.rank_))
 
-        local message = string.format("%s %s (%s)", FormatName(self.name_), FormatNr(rep_delta, "%+d"), self:GetColoredRepLevelName(rank))
-
-        if rep_delta > 0 then
-            if rank < self.maxRank_ then
-                next_rank = self:GetColoredRepLevelName(rank + 1)
-            else
-                next_rank = "end of " .. self:GetColoredRepLevelName(self.maxRank_)
-            end
-
-            local togo_next = barMax - rep_new
-            local reps_next = math.ceil(togo_next / math.abs(rep_delta))
-    
-            message = message .. string.format(", %s @ %s (%sx)", next_rank, FormatNr(togo_next), FormatNr(reps_next))
-
-            if rank < self.maxRank_ then
-                local togo_total = self.maxRep_ - rep_new
-                local reps_total = math.ceil(togo_total / math.abs(rep_delta))
-
-                message = message .. string.format(", %s @ %s (%sx)", self:GetColoredRepLevelName(self.maxRank_), FormatNr(togo_total), FormatNr(reps_total))
-            end
+    if rep_delta > 0 then
+        if self.rank_ < self.maxRank_ then
+            next_rank = self:GetColoredRepLevelName(self.rank_ + 1)
+        else
+            next_rank = "end of " .. self:GetColoredRepLevelName(self.maxRank_)
         end
 
-        Log(message)
+        local togo_next = next_rank_at - self.rep_
+        local reps_next = math.ceil(togo_next / math.abs(rep_delta))
 
-        if rank ~= self.rank_ then
-            self.rank_ = rank
-            Log("New standing with %s is %s!", FormatName(self.name_), self:GetColoredRepLevelName(rank))
+        message = message .. string.format(", %s @ %s (%sx)", next_rank, FormatNr(togo_next), FormatNr(reps_next))
+
+        if self.rank_ < self.maxRank_ - 1 then
+            local togo_total = self.maxRep_ - self.rep_
+            local reps_total = math.ceil(togo_total / math.abs(rep_delta))
+
+            message = message .. string.format(", %s @ %s (%sx)", self:GetColoredRepLevelName(self.maxRank_), FormatNr(togo_total), FormatNr(reps_total))
         end
+    end
+
+    Log(message)
+
+    if rank_change then
+        Log("New standing with %s is %s!", FormatName(self.name_), self:GetColoredRepLevelName(self.rank_))
     end
 end
 -- end class
