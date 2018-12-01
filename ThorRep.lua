@@ -1,10 +1,11 @@
-﻿local TR_CHATFRAME = _G["ChatFrame1"]
-local TR_DEBUG = true
+﻿local TR_DEBUG = true
 
-local TR_REP_LEVEL_MIN = 1
-local TR_REP_LEVEL_MAX = 8
-local TR_EXALTED_AT = 3000 + 6000 + 12000 + 21000
--- TODO colors taken from WoW Armory website. do not match in-game colors.
+-- These constants only apply to standard factions (not friendships)
+local TR_FACTION_RANK_MIN = 1
+local TR_FACTION_RANK_MAX = 8
+local TR_FACTION_REP_MAX = 3000 + 6000 + 12000 + 21000
+
+-- TODO colors taken from WoW Armory website. do not match in-game colors. in-game colors can be obtained from _G["FACTION_BAR_COLORS"][<standing>][<r|g|b>]
 -- TODO simple array would probably suffice as well
 local TR_COLOR_REP_LEVELS = {[1] = "|cffd90e03", [2] = "|cffd90e03", [3] = "|cffcc3609", [4] = "|cffedba03", [5] = "|cff0f9601", [6] = "|cff0f9601", [7] = "|cff0f9601", [8] = "|cff28a687"}
 local TR_COLOR_NAME = "|cffffff78"
@@ -17,7 +18,7 @@ local function FormatColor(color, message, ...)
 end
 
 local function Log(message, ...)
-    TR_CHATFRAME:AddMessage("[ThorRep] " .. string.format(message, ...))
+    print("[ThorRep] " .. string.format(message, ...))
 end
 
 local function LogDebug(message, ...)
@@ -36,87 +37,90 @@ Faction.__index = Faction
 function Faction:Create(factionID)
     local object = {}
     setmetatable(object, Faction)
-    object.factionID = factionID
+    object.factionID_ = factionID
 
-    local name, _, standingID, _, _, value = GetFactionInfoByID(factionID)
-    object.name = name
-    object.standingID = standingID
-    object.value = value
+    local name, _, standingID, _, _, barValue = GetFactionInfoByID(factionID)
+    object.name_ = name
+    object.rank_ = standingID
+    object.rep_ = barValue
 
-    -- local friendID, friendRep, friendMaxRep, friendName, friendText, friendTexture, friendTextLevel, friendThreshold, nextFriendThreshold = GetFriendshipReputation(factionID)
-    -- if friendID then
-    --     LogDebug("%s seems to be a friendship", name)
-    -- end
+    local friendID, _, friendMaxRep = GetFriendshipReputation(factionID)
+    if friendID ~= nil then
+        object.isFriendship_ = true
+        local _, maxRank = GetFriendshipReputationRanks(factionID)
+        object.maxRank_ = maxRank
+        object.maxRep_ = friendMaxRep
+    else
+        object.isFriendship_ = false
+        object.maxRank_ = TR_FACTION_RANK_MAX
+        object.maxRep_ = TR_FACTION_REP_MAX
+    end
 
     return object
 end
 
-function Faction:GetRepLevelColor(standingID)
-    -- TODO handle friends
-    return TR_COLOR_REP_LEVELS[standingID]
+function Faction:GetRepLevelColor(rank)
+    -- TODO handle oob?
+    local offset = TR_FACTION_RANK_MAX - self.maxRank_
+    return TR_COLOR_REP_LEVELS[rank + offset]
 end
 
-function Faction:GetRepLevelName(standingID)
-    -- TODO handle friends
-    return _G["FACTION_STANDING_LABEL" .. standingID]
+function Faction:GetRepLevelName(rank)
+    -- TODO handle oob?
+    -- TODO get actual friendship level names?
+    if self.isFriendship_ then
+        if rank == self.maxRank_ then return "max level"
+        elseif rank == TR_FACTION_RANK_MIN then return "min level"
+        elseif rank == self.rank_ + 1 then return "next level"
+        elseif rank == self.rank_ - 1 then return "previous level"
+        else return string.format("level %d", rank)
+        end
+    else
+        return _G["FACTION_STANDING_LABEL" .. rank]
+    end
 end
 
-function Faction:GetColoredRepLevelName(standingID)
-    return FormatColor(self:GetRepLevelColor(standingID), self:GetRepLevelName(standingID))
+function Faction:GetColoredRepLevelName(rank)
+    return FormatColor(self:GetRepLevelColor(rank), self:GetRepLevelName(rank))
 end
 
 function Faction:Update()
-    local _, _, standingID, barMin, barMax, barValue = GetFactionInfoByID(self.factionID)
+    local _, _, standingID, barMin, barMax, barValue = GetFactionInfoByID(self.factionID_)
 
-    local diff = barValue - self.value
+    local diff = barValue - self.rep_
+
     if diff ~= 0 then
-        if standingID ~= self.standingID then
-            local newfaction = _G["FACTION_STANDING_LABEL" .. standingID]
-            local newstandingtext =
-                "New standing with " .. TR_COLOR_NAME .. self.name .. TR_COLOR_RESUME .. " is " .. TR_COLOR_NAME .. newfaction .. TR_COLOR_RESUME .. "!"
+        self.rep_ = barValue
 
-            Log(newstandingtext)
+        if standingID ~= self.rank_ then
+            self.rank_ = standingID
+            Log("New standing with %s is %s!", FormatColor(TR_COLOR_NAME, self.name_), self:GetColoredRepLevelName(standingID))
         end
 
-        local remaining, nextstanding, plusminus
+        local message = string.format("%s %s", FormatColor(TR_COLOR_NR, "%+d", diff), FormatColor(TR_COLOR_NAME, self.name_))
+
         if diff > 0 then
-            remaining = barMax - barValue
-            if standingID < TR_REP_LEVEL_MAX then
-                nextstanding = self:GetColoredRepLevelName(standingID + 1)
+            if standingID < self.maxRank_ then
+                next_rank = self:GetColoredRepLevelName(standingID + 1)
             else
-                nextstanding = "End of " .. self:GetColoredRepLevelName(TR_REP_LEVEL_MAX)
+                next_rank = "end of " .. self:GetColoredRepLevelName(self.maxRank_)
             end
-        else
-            remaining = barValue - barMin
-            if standingID > TR_REP_LEVEL_MIN then
-                nextstanding = self:GetColoredRepLevelName(standingID - 1)
-            else
-                nextstanding = "Beginning of " .. self:GetColoredRepLevelName(TR_REP_LEVEL_MIN)
-            end
+
+            local togo_next = barMax - barValue
+            local reps_next = math.ceil(togo_next / math.abs(diff))
+            local togo_total = self.maxRep_ - barValue
+            local reps_total = math.ceil(togo_total / math.abs(diff))
+    
+            message = message .. string.format(", %s to %s (%s reps), %s to %s (%s reps)",
+                FormatColor(TR_COLOR_NR, "%d", togo_next),
+                next_rank,
+                FormatColor(TR_COLOR_NR, "%d", reps_next),
+                FormatColor(TR_COLOR_NR, "%d", togo_total),
+                self:GetColoredRepLevelName(self.maxRank_),
+                FormatColor(TR_COLOR_NR, "%d", reps_total))
         end
 
-        local change = math.abs(barValue - self.value)
-        local repetitions = math.ceil(remaining / change)
-
-        local togo_total = TR_EXALTED_AT - barValue
-        local reps_total = math.ceil(togo_total / math.abs(diff))
-
-        local newvaluetext = string.format(
-            "[ThorRep] %s %s, %s to %s (%s reps), %s to %s (%s reps)",
-            FormatColor(TR_COLOR_NR, "%+d", change),
-            FormatColor(TR_COLOR_NAME, self.name),
-            FormatColor(TR_COLOR_NR, "%d", remaining),
-            nextstanding,
-            FormatColor(TR_COLOR_NR, "%d", repetitions),
-            FormatColor(TR_COLOR_NR, "%d", togo_total),
-            self:GetColoredRepLevelName(TR_REP_LEVEL_MAX),
-            FormatColor(TR_COLOR_NR, "%d", reps_total)
-        )
-
-        Log(newvaluetext)
-
-        self.value = barValue
-        self.standingID = standingID
+        Log(message)
     end
 end
 -- end class
@@ -160,8 +164,11 @@ function Factions:Update()
         faction:Update()
     end
 end
--- end class
 
+function Factions:Size()
+    return self.size_
+end
+-- end class
 
 local factions = Factions:Create()
 
