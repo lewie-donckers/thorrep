@@ -1,11 +1,12 @@
 ﻿-- TODO
 -- - document more
+-- - check friendship fixes
 
 
 
 ---------- CONSTANTS
 
-local TR_DEBUG = false
+local TR_DEBUG = true
 
 -- TR_FACTION_RANK_MIN and TR_FACTION_RANK_MAX should match the indices in _G["FACTION_STANDING_LABEL"] (and thus TR_FACTION_RANK_NAMES) and TR_COLOR_RANKS.
 -- TR_FACTION_RANK_MIN applies to both standard factions and friendships.
@@ -62,6 +63,18 @@ local function Clamp(value, min, max)
     return value
 end
 
+-- Gets the color for the given faction rank.
+local function GetFactionRankColor(rank)
+    local rank = Clamp(rank, TR_FACTION_RANK_MIN, TR_FACTION_RANK_MAX)
+    return TR_COLOR_RANKS[rank]
+end
+
+-- Gets the colored rank name for the given standard faction rank.
+local function GetFactionRankName(rank)
+    local rank = Clamp(rank, TR_FACTION_RANK_MIN, TR_FACTION_RANK_MAX)
+    return FormatColor(GetFactionRankColor(rank), TR_FACTION_RANK_NAMES[rank])
+end
+
 
 
 ---------- CLASSES
@@ -83,43 +96,53 @@ function Faction:Create(factionID)
     local friendID, _, friendMaxRep = GetFriendshipReputation(factionID)
     if friendID ~= nil then
         object.isFriendship_ = true
-        local _, maxRank = GetFriendshipReputationRanks(factionID)
-        object.maxRank_ = maxRank
         object.maxRep_ = friendMaxRep
     else
         object.isFriendship_ = false
-        object.maxRank_ = TR_FACTION_RANK_MAX
         object.maxRep_ = TR_FACTION_REP_MAX
     end
 
     return object
 end
 
-function Faction:GetRankColor_(rank)
-    local offset = TR_FACTION_RANK_MAX - self.maxRank_
-    local index = Clamp(rank + offset, TR_FACTION_RANK_MIN, TR_FACTION_RANK_MAX)
-    return TR_COLOR_RANKS[index]
-end
-
-function Faction:GetRankName_(rank)
-    local rank = Clamp(rank, TR_FACTION_RANK_MIN, self.maxRank_)
+function Faction:IsRankMax_()
     if self.isFriendship_ then
-        if rank == self.rank_ then 
-            local _, _, _, _, _, _, friendTextLevel = GetFriendshipReputation(self.factionID_)
-            return friendTextLevel
-        elseif rank == self.maxRank_ then return "max level"
-        elseif rank == TR_FACTION_RANK_MIN then return "min level"
-        elseif rank == self.rank_ + 1 then return "next level"
-        elseif rank == self.rank_ - 1 then return "previous level"
-        else return string.format("level %d", rank)
-        end
-    else
-        return TR_FACTION_RANK_NAMES[rank]
+        return select(9, GetFriendshipReputation(self.factionID_)) == nil
     end
+
+    return self.rank_ >= TR_FACTION_RANK_MAX
 end
 
-function Faction:GetColoredRankName_(rank)
-    return FormatColor(self:GetRankColor_(rank), self:GetRankName_(rank))
+function Faction:IsNextRankMax_()
+    if self.isFriendship_ then
+        return not self:IsRankMax_() and (select(9, GetFriendshipReputation(self.factionID_)) >= self.maxRep_)
+    end
+
+    return self.rank_ + 1 >= TR_FACTION_RANK_MAX
+end
+
+function Faction:GetCurrentRankName_()
+    if self.isFriendship_ then
+        return FormatColor(GetFactionRankColor(TR_FACTION_RANK_MAX - 2), select(7, GetFriendshipReputation(self.factionID_)))
+    end
+
+    return GetFactionRankName(self.rank_)
+end
+
+function Faction:GetNextRankName_()
+    if self.isFriendship_ then
+        return FormatColor(GetFactionRankColor(TR_FACTION_RANK_MAX - 1), "next rank")
+    end
+
+    return GetFactionRankName(self.rank_ + 1)
+end
+
+function Faction:GetMaxRankName_()
+    if self.isFriendship_ then
+        return FormatColor(GetFactionRankColor(TR_FACTION_RANK_MAX), "max rank")
+    end
+
+    return GetFactionRankName(TR_FACTION_RANK_MAX)
 end
 
 function Faction:UpdateInternal_()
@@ -147,14 +170,14 @@ function Faction:Update()
 
     if rep_delta == 0 then return end
 
-    local message = string.format("%s %s (%s)", FormatName(self.name_), FormatNr(rep_delta, "%+d"), self:GetColoredRankName_(self.rank_))
+    local message = string.format("%s %s (%s)", FormatName(self.name_), FormatNr(rep_delta, "%+d"), self:GetCurrentRankName_())
 
     if (rep_delta > 0) and (self.rep_ < self.maxRep_) then
         local next_rank_str
-        if self.rank_ < self.maxRank_ then
-            next_rank_str = self:GetColoredRankName_(self.rank_ + 1)
+        if not self:IsRankMax_() then
+            next_rank_str = self:GetNextRankName_()
         else
-            next_rank_str = "full " .. self:GetColoredRankName_(self.maxRank_)
+            next_rank_str = "full " .. self:GetMaxRankName_()
         end
 
         local togo_next = next_rank_at - self.rep_
@@ -162,18 +185,18 @@ function Faction:Update()
 
         message = message .. self:GetGoalString_(next_rank_str, togo_next, reps_next)
 
-        if self.rank_ + 1 < self.maxRank_ then
+        if not self:IsNextRankMax_() then
             local togo_total = self.maxRep_ - self.rep_
             local reps_total = math.ceil(togo_total / math.abs(rep_delta))
 
-            message = message .. self:GetGoalString_(self:GetColoredRankName_(self.maxRank_), togo_total, reps_total)
+            message = message .. self:GetGoalString_(self:GetMaxRankName_(), togo_total, reps_total)
         end
     end
 
     Log(message)
 
     if rank_change then
-        Log("New standing with %s is %s!", FormatName(self.name_), self:GetColoredRankName_(self.rank_))
+        Log("New rank with %s is %s!", FormatName(self.name_), self:GetCurrentRankName_())
     end
 end
 -- end class
