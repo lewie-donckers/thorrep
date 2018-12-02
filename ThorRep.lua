@@ -146,7 +146,7 @@ function Faction:GetMaxRankName_()
 end
 
 function Faction:UpdateInternal_()
-    local _, _, rank_new, _, next_rank_at, rep_new = GetFactionInfoByID(self.factionID_)
+    local _, _, rank_new, cur_rank_at, next_rank_at, rep_new = GetFactionInfoByID(self.factionID_)
 
     rep_delta = rep_new - self.rep_
 
@@ -158,7 +158,7 @@ function Faction:UpdateInternal_()
     self.rank_ = rank_new
     self.maxRep_ = math.max(self.maxRep_, next_rank_at)
 
-    return rep_delta, rank_change, next_rank_at
+    return rep_delta, rank_change, cur_rank_at, next_rank_at
 end
 
 function Faction:GetGoalString_(rank_name, rep, reps)
@@ -166,11 +166,11 @@ function Faction:GetGoalString_(rank_name, rep, reps)
 end
 
 function Faction:Update()
-    local rep_delta, rank_change, next_rank_at = self:UpdateInternal_()
+    local rep_delta, rank_change, cur_rank_at, next_rank_at = self:UpdateInternal_()
 
     if rep_delta == 0 then return end
 
-    local message = string.format("%s %s (%s)", FormatName(self.name_), FormatNr(rep_delta, "%+d"), self:GetCurrentRankName_())
+    local message = string.format("%s %s (%s %s/%s)", FormatName(self.name_), FormatNr(rep_delta, "%+d"), self:GetCurrentRankName_(), FormatNr(self.rep_ - cur_rank_at), FormatNr(next_rank_at - cur_rank_at))
 
     if (rep_delta > 0) and (self.rep_ < self.maxRep_) then
         local next_rank_str
