@@ -1,12 +1,6 @@
-﻿-- TODO
--- - document more
--- - check friendship fixes
+﻿---------- CONSTANTS
 
-
-
----------- CONSTANTS
-
-local TR_DEBUG = true
+local TR_DEBUG = false
 
 -- TR_FACTION_RANK_MIN and TR_FACTION_RANK_MAX should match the indices in _G["FACTION_STANDING_LABEL"] (and thus TR_FACTION_RANK_NAMES) and TR_COLOR_RANKS.
 -- TR_FACTION_RANK_MIN applies to both standard factions and friendships.
