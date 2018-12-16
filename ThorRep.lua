@@ -97,11 +97,7 @@ function Faction:Create(factionID)
     end
 
     object.is_paragon_ = C_Reputation.IsFactionParagon(factionID)
-    if object.is_paragon_ then
-        local paragon_rep, paragon_max = C_Reputation.GetFactionParagonInfo(factionID)
-        object.paragon_rep_ = paragon_rep
-        object.paragon_max_ = paragon_max
-    end
+    object.paragon_rep_ = object.is_paragon_ and C_Reputation.GetFactionParagonInfo(factionID) or 0
 
     return object
 end
@@ -135,11 +131,11 @@ function Faction:GetNextRankName_()
         return FormatColor(GetFactionRankColor(TR_FACTION_RANK_MAX - 1), "next rank")
     end
 
-    if self.is_paragon_ then
-        return FormatColor(GetFactionRankColor(TR_FACTION_RANK_MAX - 1), "next paragon")
-    end
-
     return GetFactionRankName(self.rank_ + 1)
+end
+
+function Faction:GetNextParagonName_()
+    return FormatColor(GetFactionRankColor(TR_FACTION_RANK_MAX), "next paragon")
 end
 
 function Faction:GetMaxRankName_()
@@ -170,14 +166,12 @@ function Faction:UpdateInternalParagon_()
 
     if not self.is_paragon_ then return 0, false end
 
-    local paragon_rep, paragon_max = C_Reputation.GetFactionParagonInfo(self.factionID_)
-    local prev_paragon_rep = self.paragon_rep_ or 0
-    local paragon_delta = paragon_rep - prev_paragon_rep + ((paragon_rep < prev_paragon_rep) and self.paragon_max_ or 0)
+    local paragon_rep, paragon_threshold = C_Reputation.GetFactionParagonInfo(self.factionID_)
+    local paragon_delta = paragon_rep - self.paragon_rep_
 
     self.paragon_rep_ = paragon_rep
-    self.paragon_max_ = paragon_max
 
-    return paragon_delta, true, self.paragon_max_
+    return paragon_delta, true, paragon_threshold
 end
 
 function Faction:GetGoalString_(rank_name, rep, reps)
@@ -186,13 +180,13 @@ end
 
 function Faction:Update()
     local rep_delta, rank_change, cur_rank_at, next_rank_at = self:UpdateInternal_()
-    local paragon_delta, is_paragon, next_paragon_at = self:UpdateInternalParagon_()
+    local paragon_delta, is_paragon, paragon_threshold = self:UpdateInternalParagon_()
     local total_delta = rep_delta + paragon_delta
 
     if total_delta == 0 then return end
 
-    local cur_rep = is_paragon and self.paragon_rep_ or self.rep_
-    local max_rep = is_paragon and self.paragon_max_ or (next_rank_at - cur_rank_at)
+    local cur_rep = is_paragon and (self.paragon_rep_ % paragon_threshold) or self.rep_
+    local max_rep = is_paragon and paragon_threshold or (next_rank_at - cur_rank_at)
 
     local message = string.format("%s %s (%s %s/%s)", FormatName(self.name_), FormatNr(total_delta, "%+d"), self:GetCurrentRankName_(), FormatNr(cur_rep), FormatNr(max_rep))
 
@@ -218,10 +212,10 @@ function Faction:Update()
     end
 
     if (total_delta > 0) and is_paragon then
-        local togo_next = next_paragon_at - self.paragon_rep_
+        local togo_next = paragon_threshold - (self.paragon_rep_ % paragon_threshold)
         local reps_next = math.ceil(togo_next / math.abs(total_delta))
 
-        message = message .. self:GetGoalString_(self:GetNextRankName_(), togo_next, reps_next)
+        message = message .. self:GetGoalString_(self:GetNextParagonName_(), togo_next, reps_next)
     end
 
     Log(message)
