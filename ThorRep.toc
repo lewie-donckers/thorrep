@@ -1,5 +1,5 @@
 ## Interface: 80100
-## Title: ThorRep 8.1.0.0
+## Title: ThorRep 8.1.0.1
 ## Notes: ThorRep displays information about reputation gains.
 ## Author: Thorinson
 

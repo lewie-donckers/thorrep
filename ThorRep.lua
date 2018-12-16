@@ -96,6 +96,13 @@ function Faction:Create(factionID)
         object.maxRep_ = TR_FACTION_REP_MAX
     end
 
+    object.is_paragon_ = C_Reputation.IsFactionParagon(factionID)
+    if object.is_paragon_ then
+        local paragon_rep, paragon_max = C_Reputation.GetFactionParagonInfo(factionID)
+        object.paragon_rep_ = paragon_rep
+        object.paragon_max_ = paragon_max
+    end
+
     return object
 end
 
@@ -128,6 +135,10 @@ function Faction:GetNextRankName_()
         return FormatColor(GetFactionRankColor(TR_FACTION_RANK_MAX - 1), "next rank")
     end
 
+    if self.is_paragon_ then
+        return FormatColor(GetFactionRankColor(TR_FACTION_RANK_MAX - 1), "next paragon")
+    end
+
     return GetFactionRankName(self.rank_ + 1)
 end
 
@@ -141,10 +152,9 @@ end
 
 function Faction:UpdateInternal_()
     local _, _, rank_new, cur_rank_at, next_rank_at, rep_new = GetFactionInfoByID(self.factionID_)
+    local rep_delta = rep_new - self.rep_
 
-    rep_delta = rep_new - self.rep_
-
-    if (rep_delta == 0) then return 0 end
+    if (rep_delta == 0) then return 0, false, cur_rank_at, next_rank_at end
 
     local rank_change = self.rank_ ~= rank_new
 
@@ -155,18 +165,38 @@ function Faction:UpdateInternal_()
     return rep_delta, rank_change, cur_rank_at, next_rank_at
 end
 
+function Faction:UpdateInternalParagon_()
+    self.is_paragon_ = C_Reputation.IsFactionParagon(self.factionID_)
+
+    if not self.is_paragon_ then return 0, false end
+
+    local paragon_rep, paragon_max = C_Reputation.GetFactionParagonInfo(self.factionID_)
+    local prev_paragon_rep = self.paragon_rep_ or 0
+    local paragon_delta = paragon_rep - prev_paragon_rep + ((paragon_rep < prev_paragon_rep) and self.paragon_max_ or 0)
+
+    self.paragon_rep_ = paragon_rep
+    self.paragon_max_ = paragon_max
+
+    return paragon_delta, true, self.paragon_max_
+end
+
 function Faction:GetGoalString_(rank_name, rep, reps)
     return string.format(", %s @ %s (%sx)", rank_name, FormatNr(rep), FormatNr(reps))
 end
 
 function Faction:Update()
     local rep_delta, rank_change, cur_rank_at, next_rank_at = self:UpdateInternal_()
+    local paragon_delta, is_paragon, next_paragon_at = self:UpdateInternalParagon_()
+    local total_delta = rep_delta + paragon_delta
 
-    if rep_delta == 0 then return end
+    if total_delta == 0 then return end
 
-    local message = string.format("%s %s (%s %s/%s)", FormatName(self.name_), FormatNr(rep_delta, "%+d"), self:GetCurrentRankName_(), FormatNr(self.rep_ - cur_rank_at), FormatNr(next_rank_at - cur_rank_at))
+    local cur_rep = is_paragon and self.paragon_rep_ or self.rep_
+    local max_rep = is_paragon and self.paragon_max_ or (next_rank_at - cur_rank_at)
 
-    if (rep_delta > 0) and (self.rep_ < self.maxRep_) then
+    local message = string.format("%s %s (%s %s/%s)", FormatName(self.name_), FormatNr(total_delta, "%+d"), self:GetCurrentRankName_(), FormatNr(cur_rep), FormatNr(max_rep))
+
+    if (total_delta > 0) and (self.rep_ < self.maxRep_) then
         local next_rank_str
         if not self:IsRankMax_() then
             next_rank_str = self:GetNextRankName_()
@@ -175,16 +205,23 @@ function Faction:Update()
         end
 
         local togo_next = next_rank_at - self.rep_
-        local reps_next = math.ceil(togo_next / math.abs(rep_delta))
+        local reps_next = math.ceil(togo_next / math.abs(total_delta))
 
         message = message .. self:GetGoalString_(next_rank_str, togo_next, reps_next)
 
         if not self:IsNextRankMax_() then
             local togo_total = self.maxRep_ - self.rep_
-            local reps_total = math.ceil(togo_total / math.abs(rep_delta))
+            local reps_total = math.ceil(togo_total / math.abs(total_delta))
 
             message = message .. self:GetGoalString_(self:GetMaxRankName_(), togo_total, reps_total)
         end
+    end
+
+    if (total_delta > 0) and is_paragon then
+        local togo_next = next_paragon_at - self.paragon_rep_
+        local reps_next = math.ceil(togo_next / math.abs(total_delta))
+
+        message = message .. self:GetGoalString_(self:GetNextRankName_(), togo_next, reps_next)
     end
 
     Log(message)
