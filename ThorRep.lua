@@ -1,4 +1,4 @@
----------- CONSTANTS
+﻿---------- CONSTANTS
 
 local TR_DEBUG = false
 
@@ -150,15 +150,13 @@ function Faction:UpdateInternal_()
     local _, _, rankNew, curRankAt, nextRankAt, repNew = GetFactionInfoByID(self.factionID_)
     local repDelta = repNew - self.rep_
 
-    if (repDelta == 0) then return 0, false, curRankAt, nextRankAt end
+    if repDelta ~= 0 then
+        self.rep_ = repNew
+        self.rank_ = rankNew
+        self.maxRep_ = math.max(self.maxRep_, nextRankAt)
+    end
 
-    local rankChange = self.rank_ ~= rankNew
-
-    self.rep_ = repNew
-    self.rank_ = rankNew
-    self.maxRep_ = math.max(self.maxRep_, nextRankAt)
-
-    return repDelta, rankChange, curRankAt, nextRankAt
+    return repDelta, curRankAt, nextRankAt
 end
 
 function Faction:UpdateInternalParagon_()
@@ -179,7 +177,7 @@ function Faction:GetGoalString_(rank_name, rep, reps)
 end
 
 function Faction:Update()
-    local repDelta, rankChange, curRankAt, nextRankAt = self:UpdateInternal_()
+    local repDelta, curRankAt, nextRankAt = self:UpdateInternal_()
     local paragonDelta, isParagon, paragonThreshold = self:UpdateInternalParagon_()
     local totalDelta = repDelta + paragonDelta
 
@@ -219,10 +217,6 @@ function Faction:Update()
     end
 
     Log(message)
-
-    if rankChange then
-        Log("New rank with %s is %s!", FormatName(self.name_), self:GetCurrentRankName_())
-    end
 end
 -- end class
 
