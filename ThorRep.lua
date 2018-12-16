@@ -1,4 +1,4 @@
-﻿---------- CONSTANTS
+---------- CONSTANTS
 
 local TR_DEBUG = false
 
@@ -185,7 +185,7 @@ function Faction:Update()
 
     if totalDelta == 0 then return end
 
-    local cur_rep = isParagon and (self.paragonRep_ % paragonThreshold) or self.rep_
+    local cur_rep = isParagon and (self.paragonRep_ % paragonThreshold) or (self.rep_ - curRankAt)
     local max_rep = isParagon and paragonThreshold or (nextRankAt - curRankAt)
 
     local message = string.format("%s %s (%s %s/%s)", FormatName(self.name_), FormatNr(totalDelta, "%+d"), self:GetCurrentRankName_(), FormatNr(cur_rep), FormatNr(max_rep))
