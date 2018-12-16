@@ -82,10 +82,10 @@ function Faction:Create(factionID)
     setmetatable(object, Faction)
     object.factionID_ = factionID
 
-    local name, _, rank, _, _, rep_new = GetFactionInfoByID(factionID)
+    local name, _, rank, _, _, repNew = GetFactionInfoByID(factionID)
     object.name_ = name
     object.rank_ = rank
-    object.rep_ = rep_new
+    object.rep_ = repNew
 
     local friendID, _, friendMaxRep = GetFriendshipReputation(factionID)
     if friendID ~= nil then
@@ -96,8 +96,8 @@ function Faction:Create(factionID)
         object.maxRep_ = TR_FACTION_REP_MAX
     end
 
-    object.is_paragon_ = C_Reputation.IsFactionParagon(factionID)
-    object.paragon_rep_ = object.is_paragon_ and C_Reputation.GetFactionParagonInfo(factionID) or 0
+    object.isParagon_ = C_Reputation.IsFactionParagon(factionID)
+    object.paragonRep_ = object.isParagon_ and C_Reputation.GetFactionParagonInfo(factionID) or 0
 
     return object
 end
@@ -147,31 +147,31 @@ function Faction:GetMaxRankName_()
 end
 
 function Faction:UpdateInternal_()
-    local _, _, rank_new, cur_rank_at, next_rank_at, rep_new = GetFactionInfoByID(self.factionID_)
-    local rep_delta = rep_new - self.rep_
+    local _, _, rankNew, curRankAt, nextRankAt, repNew = GetFactionInfoByID(self.factionID_)
+    local repDelta = repNew - self.rep_
 
-    if (rep_delta == 0) then return 0, false, cur_rank_at, next_rank_at end
+    if (repDelta == 0) then return 0, false, curRankAt, nextRankAt end
 
-    local rank_change = self.rank_ ~= rank_new
+    local rankChange = self.rank_ ~= rankNew
 
-    self.rep_ = rep_new
-    self.rank_ = rank_new
-    self.maxRep_ = math.max(self.maxRep_, next_rank_at)
+    self.rep_ = repNew
+    self.rank_ = rankNew
+    self.maxRep_ = math.max(self.maxRep_, nextRankAt)
 
-    return rep_delta, rank_change, cur_rank_at, next_rank_at
+    return repDelta, rankChange, curRankAt, nextRankAt
 end
 
 function Faction:UpdateInternalParagon_()
-    self.is_paragon_ = C_Reputation.IsFactionParagon(self.factionID_)
+    self.isParagon_ = C_Reputation.IsFactionParagon(self.factionID_)
 
-    if not self.is_paragon_ then return 0, false end
+    if not self.isParagon_ then return 0, false end
 
-    local paragon_rep, paragon_threshold = C_Reputation.GetFactionParagonInfo(self.factionID_)
-    local paragon_delta = paragon_rep - self.paragon_rep_
+    local paragonRep, paragonThreshold = C_Reputation.GetFactionParagonInfo(self.factionID_)
+    local paragonDelta = paragonRep - self.paragonRep_
 
-    self.paragon_rep_ = paragon_rep
+    self.paragonRep_ = paragonRep
 
-    return paragon_delta, true, paragon_threshold
+    return paragonDelta, true, paragonThreshold
 end
 
 function Faction:GetGoalString_(rank_name, rep, reps)
@@ -179,48 +179,48 @@ function Faction:GetGoalString_(rank_name, rep, reps)
 end
 
 function Faction:Update()
-    local rep_delta, rank_change, cur_rank_at, next_rank_at = self:UpdateInternal_()
-    local paragon_delta, is_paragon, paragon_threshold = self:UpdateInternalParagon_()
-    local total_delta = rep_delta + paragon_delta
+    local repDelta, rankChange, curRankAt, nextRankAt = self:UpdateInternal_()
+    local paragonDelta, isParagon, paragonThreshold = self:UpdateInternalParagon_()
+    local totalDelta = repDelta + paragonDelta
 
-    if total_delta == 0 then return end
+    if totalDelta == 0 then return end
 
-    local cur_rep = is_paragon and (self.paragon_rep_ % paragon_threshold) or self.rep_
-    local max_rep = is_paragon and paragon_threshold or (next_rank_at - cur_rank_at)
+    local cur_rep = isParagon and (self.paragonRep_ % paragonThreshold) or self.rep_
+    local max_rep = isParagon and paragonThreshold or (nextRankAt - curRankAt)
 
-    local message = string.format("%s %s (%s %s/%s)", FormatName(self.name_), FormatNr(total_delta, "%+d"), self:GetCurrentRankName_(), FormatNr(cur_rep), FormatNr(max_rep))
+    local message = string.format("%s %s (%s %s/%s)", FormatName(self.name_), FormatNr(totalDelta, "%+d"), self:GetCurrentRankName_(), FormatNr(cur_rep), FormatNr(max_rep))
 
-    if (total_delta > 0) and (self.rep_ < self.maxRep_) then
-        local next_rank_str
+    if (totalDelta > 0) and (self.rep_ < self.maxRep_) then
+        local nextRankStr
         if not self:IsRankMax_() then
-            next_rank_str = self:GetNextRankName_()
+            nextRankStr = self:GetNextRankName_()
         else
-            next_rank_str = "full " .. self:GetMaxRankName_()
+            nextRankStr = "full " .. self:GetMaxRankName_()
         end
 
-        local togo_next = next_rank_at - self.rep_
-        local reps_next = math.ceil(togo_next / math.abs(total_delta))
+        local togoNext = nextRankAt - self.rep_
+        local repsNext = math.ceil(togoNext / math.abs(totalDelta))
 
-        message = message .. self:GetGoalString_(next_rank_str, togo_next, reps_next)
+        message = message .. self:GetGoalString_(nextRankStr, togoNext, repsNext)
 
         if not self:IsNextRankMax_() then
-            local togo_total = self.maxRep_ - self.rep_
-            local reps_total = math.ceil(togo_total / math.abs(total_delta))
+            local togoTotal = self.maxRep_ - self.rep_
+            local repsTotal = math.ceil(togoTotal / math.abs(totalDelta))
 
-            message = message .. self:GetGoalString_(self:GetMaxRankName_(), togo_total, reps_total)
+            message = message .. self:GetGoalString_(self:GetMaxRankName_(), togoTotal, repsTotal)
         end
     end
 
-    if (total_delta > 0) and is_paragon then
-        local togo_next = paragon_threshold - (self.paragon_rep_ % paragon_threshold)
-        local reps_next = math.ceil(togo_next / math.abs(total_delta))
+    if (totalDelta > 0) and isParagon then
+        local togoNext = paragonThreshold - (self.paragonRep_ % paragonThreshold)
+        local repsNext = math.ceil(togoNext / math.abs(totalDelta))
 
-        message = message .. self:GetGoalString_(self:GetNextParagonName_(), togo_next, reps_next)
+        message = message .. self:GetGoalString_(self:GetNextParagonName_(), togoNext, repsNext)
     end
 
     Log(message)
 
-    if rank_change then
+    if rankChange then
         Log("New rank with %s is %s!", FormatName(self.name_), self:GetCurrentRankName_())
     end
 end
@@ -243,8 +243,8 @@ end
 
 function Factions:Scan()
     LogDebug("Scanning factions...")
-    local to_index = GetNumFactions()
-    for index = 1, to_index do
+    local maxIndex = GetNumFactions()
+    for index = 1, maxIndex do
         local _, _, _, _, _, _, _, _, isHeader, _, hasRep, _, _, factionID = GetFactionInfo(index)
         if (not isHeader or hasRep) then
 
@@ -254,7 +254,7 @@ function Factions:Scan()
             end
         end
     end
-    self.indexed_ = to_index
+    self.indexed_ = maxIndex
     LogDebug("Found %d factions", self.size_)
 end
 
