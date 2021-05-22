@@ -3,8 +3,6 @@
 local TR_DEBUG = false
 
 -- TR_FACTION_RANK_MIN and TR_FACTION_RANK_MAX should match the indices in _G["FACTION_STANDING_LABEL"] (and thus TR_FACTION_RANK_NAMES) and TR_COLOR_RANKS.
--- TR_FACTION_RANK_MIN applies to both standard factions and friendships.
--- The other constants only apply to standard factions.
 local TR_FACTION_RANK_MIN = 1
 local TR_FACTION_RANK_MAX = 8
 local TR_FACTION_REP_MAX = 3000 + 6000 + 12000 + 21000
@@ -86,63 +84,28 @@ function Faction:Create(factionID)
     object.name_ = name
     object.rank_ = rank
     object.rep_ = repNew
-
-    local friendID, _, friendMaxRep = GetFriendshipReputation(factionID)
-    if friendID ~= nil then
-        object.isFriendship_ = true
-        object.maxRep_ = friendMaxRep
-    else
-        object.isFriendship_ = false
-        object.maxRep_ = TR_FACTION_REP_MAX
-    end
-
-    object.isParagon_ = C_Reputation.IsFactionParagon(factionID)
-    object.paragonRep_ = object.isParagon_ and C_Reputation.GetFactionParagonInfo(factionID) or 0
+    object.maxRep_ = TR_FACTION_REP_MAX
 
     return object
 end
 
 function Faction:IsRankMax_()
-    if self.isFriendship_ then
-        return select(9, GetFriendshipReputation(self.factionID_)) == nil
-    end
-
     return self.rank_ >= TR_FACTION_RANK_MAX
 end
 
 function Faction:IsNextRankMax_()
-    if self.isFriendship_ then
-        return not self:IsRankMax_() and (select(9, GetFriendshipReputation(self.factionID_)) >= self.maxRep_)
-    end
-
     return self.rank_ + 1 >= TR_FACTION_RANK_MAX
 end
 
 function Faction:GetCurrentRankName_()
-    if self.isFriendship_ then
-        return FormatColor(GetFactionRankColor(TR_FACTION_RANK_MAX - 2), select(7, GetFriendshipReputation(self.factionID_)))
-    end
-
     return GetFactionRankName(self.rank_)
 end
 
 function Faction:GetNextRankName_()
-    if self.isFriendship_ then
-        return FormatColor(GetFactionRankColor(TR_FACTION_RANK_MAX - 1), "next rank")
-    end
-
     return GetFactionRankName(self.rank_ + 1)
 end
 
-function Faction:GetNextParagonName_()
-    return FormatColor(GetFactionRankColor(TR_FACTION_RANK_MAX), "next paragon")
-end
-
 function Faction:GetMaxRankName_()
-    if self.isFriendship_ then
-        return FormatColor(GetFactionRankColor(TR_FACTION_RANK_MAX), "max rank")
-    end
-
     return GetFactionRankName(TR_FACTION_RANK_MAX)
 end
 
@@ -159,36 +122,21 @@ function Faction:UpdateInternal_()
     return repDelta, curRankAt, nextRankAt
 end
 
-function Faction:UpdateInternalParagon_()
-    self.isParagon_ = C_Reputation.IsFactionParagon(self.factionID_)
-
-    if not self.isParagon_ then return 0, false end
-
-    local paragonRep, paragonThreshold = C_Reputation.GetFactionParagonInfo(self.factionID_)
-    local paragonDelta = paragonRep - self.paragonRep_
-
-    self.paragonRep_ = paragonRep
-
-    return paragonDelta, true, paragonThreshold
-end
-
 function Faction:GetGoalString_(rank_name, rep, reps)
     return string.format(", %s @ %s (%sx)", rank_name, FormatNr(rep), FormatNr(reps))
 end
 
 function Faction:Update()
     local repDelta, curRankAt, nextRankAt = self:UpdateInternal_()
-    local paragonDelta, isParagon, paragonThreshold = self:UpdateInternalParagon_()
-    local totalDelta = repDelta + paragonDelta
 
-    if totalDelta == 0 then return end
+    if repDelta == 0 then return end
 
-    local curRep = isParagon and (self.paragonRep_ % paragonThreshold) or (self.rep_ - curRankAt)
-    local maxRep = isParagon and paragonThreshold or (nextRankAt - curRankAt)
+    local curRep = self.rep_ - curRankAt
+    local maxRep = nextRankAt - curRankAt
 
-    local message = string.format("%s %s (%s %s/%s)", FormatName(self.name_), FormatNr(totalDelta, "%+d"), self:GetCurrentRankName_(), FormatNr(curRep), FormatNr(maxRep))
+    local message = string.format("%s %s (%s %s/%s)", FormatName(self.name_), FormatNr(repDelta, "%+d"), self:GetCurrentRankName_(), FormatNr(curRep), FormatNr(maxRep))
 
-    if (totalDelta > 0) and (self.rep_ < self.maxRep_) then
+    if (repDelta > 0) and (self.rep_ < self.maxRep_) then
         local nextRankStr
         if not self:IsRankMax_() then
             nextRankStr = self:GetNextRankName_()
@@ -197,23 +145,16 @@ function Faction:Update()
         end
 
         local togoNext = nextRankAt - self.rep_
-        local repsNext = math.ceil(togoNext / math.abs(totalDelta))
+        local repsNext = math.ceil(togoNext / math.abs(repDelta))
 
         message = message .. self:GetGoalString_(nextRankStr, togoNext, repsNext)
 
         if not self:IsNextRankMax_() then
             local togoTotal = self.maxRep_ - self.rep_
-            local repsTotal = math.ceil(togoTotal / math.abs(totalDelta))
+            local repsTotal = math.ceil(togoTotal / math.abs(repDelta))
 
             message = message .. self:GetGoalString_(self:GetMaxRankName_(), togoTotal, repsTotal)
         end
-    end
-
-    if (totalDelta > 0) and isParagon then
-        local togoNext = paragonThreshold - (self.paragonRep_ % paragonThreshold)
-        local repsNext = math.ceil(togoNext / math.abs(totalDelta))
-
-        message = message .. self:GetGoalString_(self:GetNextParagonName_(), togoNext, repsNext)
     end
 
     Log(message)
@@ -236,12 +177,11 @@ function Factions:Create()
 end
 
 function Factions:Scan()
-    LogDebug("Scanning factions...")
     local maxIndex = GetNumFactions()
+    LogDebug("Scanning %d factions...", maxIndex)
     for index = 1, maxIndex do
         local _, _, _, _, _, _, _, _, isHeader, _, hasRep, _, _, factionID = GetFactionInfo(index)
         if (not isHeader or hasRep) then
-
             if self.factions_[factionID] == nil then
                 self.factions_[factionID] = Faction:Create(factionID)
                 self.size_ = self.size_ + 1
