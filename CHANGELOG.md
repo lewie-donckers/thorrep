@@ -1,5 +1,5 @@
-# ThorRep changelog
+# ThorReputation changelog
 
-## 2.5.1.0 (2021-05-22)
+## 9.0.0 (2022-11-23)
 
-First release.
+- First release for Wrath of the Lich King classic.

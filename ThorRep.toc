@@ -1,6 +1,0 @@
-## Interface: 20501
-## Title: ThorRep 2.5.1.0
-## Notes: ThorRep displays information about reputation gains.
-## Author: Thorinson
-
-ThorRep.lua

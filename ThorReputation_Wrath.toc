@@ -1,0 +1,6 @@
+## Interface: 30400
+## Title: ThorReputation 9.0.0
+## Notes: ThorReputation displays information about reputation gains.
+## Author: Thorinsøn
+
+ThorReputation.xml
